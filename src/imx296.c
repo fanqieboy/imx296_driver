@@ -70,12 +70,17 @@ const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 30};
 
 #define to_imx296(sd) container_of(sd, struct imx296, subdev)
 
+#define IMX296_LINK_FREQ                594000000ULL
+#define IMX296_LANES                    2
+#define IMX296_BPP                      10
+#define IMX296_PIXEL_RATE               ((IMX296_LINK_FREQ * 2 * IMX296_LANES) / IMX296_BPP)
+
 static const s64 imx296_link_freqs[] = {
-    594000000, // 371.25 MHz (注意是 3.7 亿)
+    IMX296_LINK_FREQ, // 371.25 MHz (注意是 3.7 亿)
 };
 
 static const s64 imx296_pixel_rate[] = {
-    237600000,
+    IMX296_PIXEL_RATE,
 };
 
 
