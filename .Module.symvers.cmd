@@ -1,0 +1,1 @@
+cmd_/home/lx/3588_drivers/camera_driver_ws/Module.symvers :=  sed 's/ko$$/o/'  /home/lx/3588_drivers/camera_driver_ws/modules.order | scripts/mod/modpost -m -a     -o /home/lx/3588_drivers/camera_driver_ws/Module.symvers -e -i Module.symvers -T - 

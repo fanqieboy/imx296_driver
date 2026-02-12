@@ -1,0 +1,1 @@
+cmd_/home/lx/3588_drivers/camera_driver_ws/src/imx296.ko := aarch64-linux-gnu-ld -r  -EL  -maarch64elf -z noexecstack   --build-id=sha1  -T scripts/module.lds -o /home/lx/3588_drivers/camera_driver_ws/src/imx296.ko /home/lx/3588_drivers/camera_driver_ws/src/imx296.o /home/lx/3588_drivers/camera_driver_ws/src/imx296.mod.o;  true

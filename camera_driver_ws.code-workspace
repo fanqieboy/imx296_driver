@@ -1,0 +1,13 @@
+{
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "path": "../../3588sdk/raw/ubuntu-rockchip/kernel-6.1"
+        },
+        {
+            "path": "../../3588sdk/raw/ubuntu-rockchip/build/linux-rockchip"
+        }
+    ]
+}
