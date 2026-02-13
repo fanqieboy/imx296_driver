@@ -17,6 +17,9 @@
 #define KBUILD_BASENAME "imx296"
 #endif
 
+#define VERSION_MAJOR                   1
+#define VERSION_MINOR                   0
+
 #define IMX296_NAME                     "imx296"
 
 #define IMX296_PIXEL_ARRAY_WIDTH		1456
@@ -579,7 +582,6 @@ static int imx296_set_fmt(struct v4l2_subdev *sd,
     struct v4l2_subdev_format *fmt)
 {
     struct imx296 *imx296 = to_imx296(sd);
-    // struct v4l2_mbus_framefmt *format;
 
     printk("in set fmt\n");
     
@@ -594,19 +596,6 @@ static int imx296_set_fmt(struct v4l2_subdev *sd,
     fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
     fmt->format.quantization = V4L2_QUANTIZATION_FULL_RANGE;
     fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
-
-    // if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
-    //     format = v4l2_subdev_get_try_format(sd, state, fmt->pad);
-    //     // *v4l2_subdev_get_try_format(sd, state, fmt->pad) = fmt->format;
-    // }
-    // else {
-    //     if (imx296->link_freq)
-    //         __v4l2_ctrl_s_ctrl(imx296->link_freq, imx296_link_freqs[0]);
-    //     if (imx296->pixel_rate)
-    //         __v4l2_ctrl_s_ctrl_int64(imx296->pixel_rate, imx296_pixel_rate[0]);
-    // }
-
-    // *format = fmt->format;
 
     printk("DEBUG_IMX296: width: %d, height: %d, code: %d, field: %d\n", fmt->format.width, fmt->format.height, fmt->format.code, fmt->format.field);
 
@@ -719,7 +708,8 @@ static int imx296_probe(struct i2c_client *client)
     struct v4l2_subdev *sd;
     int ret;
 
-    printk("--- [IMX296] Probe Start ---\n");
+    dev_info(dev, "driver version : %02d.%02d\n", VERSION_MAJOR, VERSION_MINOR);
+    dev_info(dev, "--- [IMX296] Probe Start ---\n");
 
     imx296 = devm_kzalloc(dev, sizeof(*imx296), GFP_KERNEL);
     if (!imx296) return -ENOMEM;
@@ -800,7 +790,7 @@ static int imx296_probe(struct i2c_client *client)
     /* E. 异步注册 */
     ret = v4l2_async_register_subdev_sensor(sd);
     if (ret) {
-        printk("--- [IMX296] Register Failed: %d ---\n", ret);
+        dev_err(dev, "--- [IMX296] Register Failed: %d ---\n", ret);
         goto err_power_off;
     }
 
@@ -808,7 +798,7 @@ static int imx296_probe(struct i2c_client *client)
     pm_runtime_enable(dev);
     pm_runtime_idle(dev);
 
-    printk("--- [IMX296] Register Success, Waiting for Handshake... ---\n");
+    dev_info(dev, "--- [IMX296] Register Success, Waiting for Handshake... ---\n");
     return 0;
 
 err_power_off:
