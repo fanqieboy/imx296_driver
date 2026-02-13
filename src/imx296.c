@@ -532,7 +532,7 @@ static int imx296_enum_frame_interval(struct v4l2_subdev *sd,
 {
     fi->interval = IMX296_FRAME_INTERVAL;
     fi->width = IMX296_PIXEL_ARRAY_WIDTH;
-    fi->height = IMX296_PIXEL_ARRAY_WIDTH;
+    fi->height = IMX296_PIXEL_ARRAY_HEIGHT;
     fi->code = IMX296_FRAME_CODE;
     fi->reserved[0] = 0;
 
