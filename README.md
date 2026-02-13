@@ -13,7 +13,7 @@
 | 信号线 | SoC 引脚 | 备注 |
 | :--- | :--- | :--- |
 | MIPI_CLK | MIPI_CSI0_CLK | |
-| I2C_ADDR | $0x1A$ | 默认 I2C 地址 |
+| I2C_ADDR | $0x1A$ | |
 
 ## 3. 编译与运行
 可结合`Makefile`进行编译
