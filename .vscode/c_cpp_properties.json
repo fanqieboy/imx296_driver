@@ -4,14 +4,14 @@
             "name": "rk3588-kernel",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/lx/3588sdk/raw/ubuntu-rockchip/kernel-6.1/**",
-                "/home/lx/3588sdk/raw/ubuntu-rockchip/kernel-6.1/include",
-                "/home/lx/3588sdk/raw/ubuntu-rockchip/kernel-6.1/arch/arm64/include",
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/**",
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/include",
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/arch/arm64/include",
 
-                "/home/lx/3588sdk/raw/ubuntu-rockchip/build/linux-rockchip/**",
-                "/home/lx/3588sdk/raw/ubuntu-rockchip/build/linux-rockchip/include/generated",
-                "/home/lx/3588sdk/raw/ubuntu-rockchip/build/linux-rockchip/arch/arm64/include/generated",
-                "/home/lx/3588sdk/raw/ubuntu-rockchip//build/linux-rockchip/include/uapi"
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/**",
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/include/generated",
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/arch/arm64/include/generated",
+                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip//build/linux-rockchip/include/uapi"
             ],
             "defines": [
                 "__KERNEL__",
