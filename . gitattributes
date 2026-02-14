@@ -1,5 +1,10 @@
-# 1. 先把所有文件标记为“已卖出/非原创”，不计入统计
+# 1. 默认排除仓库中所有文件
 * linguist-vendored
+* linguist-generated
 
-# 2. 只有 src 目录下的 C 相关文件才是我的核心代码
-src/*.c -linguist-vendored
+# 2. 强制包含 src 目录下的内容，并指定为 C 语言
+# 使用 ** 确保即使以后有子文件夹也能匹配，- 符号表示取消排除
+src/** -linguist-vendored
+src/** -linguist-generated
+src/** linguist-language=C
+src/** linguist-detectable
