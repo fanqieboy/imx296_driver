@@ -1,0 +1,5 @@
+# 1. 先把所有文件标记为“已卖出/非原创”，不计入统计
+* linguist-vendored
+
+# 2. 只有 src 目录下的 C 相关文件才是我的核心代码
+src/*.c linguist-vendored=false
