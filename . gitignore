@@ -1,8 +1,16 @@
-# 忽略所有编译生成的中间件
+# 基础二进制
 *.o
+*.mod.o
 *.ko
+
+# 内核编译特有的中间代码
 *.mod.c
 *.mod
-*.symvers
-*.order
+
+# 符号表与元数据
+modules.order
+Module.symvers
+.tmp_versions/
+
+# 隐藏的编译指令文件（最容易被忽略但最占地方）
 .*.cmd
