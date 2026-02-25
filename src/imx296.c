@@ -382,7 +382,7 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
     imx296_write_reg(client, IMX296_GTTABLENUM, 0xc5);
     imx296_write_reg(client, IMX296_CTRL418C, 116);
 
-    imx296_write_reg(client, IMX296_GAINDLY, IMX296_GAINDLY_NONE);
+    imx296_write_reg(client, IMX296_GAINDLY, IMX296_GAINDLY_1FRAME);
     imx296_write_reg(client, IMX296_BLKLEVEL, 0x03c);
 
     return ret;
