@@ -13,18 +13,14 @@
 #include <media/v4l2-fwnode.h>
 #include <linux/of_graph.h>
 
-#ifndef KBUILD_BASENAME
-#define KBUILD_BASENAME "imx296"
-#endif
-
 #define VERSION_MAJOR                   1
-#define VERSION_MINOR                   0
+#define VERSION_MINOR                   1
 
 #define IMX296_NAME                     "imx296"
 
 #define IMX296_PIXEL_ARRAY_WIDTH		1456
 #define IMX296_PIXEL_ARRAY_HEIGHT		1088
-const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 30};
+const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 60};
 #define IMX296_FRAME_INTERVAL           IMX296_MAX_FPS
 
 /* 寄存器位宽宏：从地址中提取长度 */
@@ -36,6 +32,7 @@ const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 30};
 #define IMX296_REG_SIZE_SHIFT			16
 #define IMX296_REG_SIZE_MASK            0x3
 #define IMX296_SENSOR_INFO_IMX296LQ		0x4a00
+#define IMX296_GAINDLY_NONE				0x08
 #define IMX296_GAINDLY_1FRAME			0x09
 #define IMX296_FRAME_CODE               MEDIA_BUS_FMT_SRGGB10_1X10
 
@@ -74,18 +71,12 @@ const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 30};
 #define to_imx296(sd) container_of(sd, struct imx296, subdev)
 
 #define IMX296_LINK_FREQ                594000000ULL
-#define IMX296_LANES                    2
+#define IMX296_LANES                    1
 #define IMX296_BPP                      10
-#define IMX296_PIXEL_RATE               ((IMX296_LINK_FREQ * 2 * IMX296_LANES) / IMX296_BPP)
 
 static const s64 imx296_link_freqs[] = {
-    IMX296_LINK_FREQ, // 371.25 MHz (注意是 3.7 亿)
+    IMX296_LINK_FREQ, // 594 MHz
 };
-
-static const s64 imx296_pixel_rate[] = {
-    IMX296_PIXEL_RATE,
-};
-
 
 static long imx296_ioctl(struct v4l2_subdev *sd, 
     unsigned int cmd, void *arg);
@@ -120,7 +111,7 @@ static int imx296_runtime_resume(struct device *dev);
 static int imx296_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh);
 
 static const struct v4l2_subdev_core_ops imx296_core_ops = {
-    .ioctl = imx296_ioctl,
+    // .ioctl = imx296_ioctl,
 };
 
 static const struct v4l2_subdev_video_ops imx296_video_ops = {
@@ -346,8 +337,6 @@ static long imx296_ioctl(
         ch_info->width = IMX296_PIXEL_ARRAY_WIDTH;
         ch_info->height = IMX296_PIXEL_ARRAY_HEIGHT;
         ch_info->bus_fmt = IMX296_FRAME_CODE;
-        ch_info->data_type = 0x2b;
-        ch_info->data_bit = 10;
         return 0;
     case RKMODULE_GET_MODULE_INFO: {
         struct rkmodule_inf *inf = (struct rkmodule_inf *)arg;
@@ -380,12 +369,11 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
     }
 
     imx296_write_reg(client, IMX296_FID0_ROI, 0);
-    imx296_write_reg(client, IMX296_MIPIC_AREA3W, IMX296_PIXEL_ARRAY_HEIGHT);
 
     imx296_write_reg(client, IMX296_CTRL0D, 0);
 
     imx296_write_reg(client, IMX296_HMAX, 1100);
-    imx296_write_reg(client, IMX296_VMAX, 1125);
+    imx296_write_reg(client, IMX296_VMAX, 1118);
 
     imx296_write_reg(client, IMX296_INCKSEL(0), 0x80);
     imx296_write_reg(client, IMX296_INCKSEL(1), 0x0b);
@@ -394,7 +382,7 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
     imx296_write_reg(client, IMX296_GTTABLENUM, 0xc5);
     imx296_write_reg(client, IMX296_CTRL418C, 116);
 
-    imx296_write_reg(client, IMX296_GAINDLY, IMX296_GAINDLY_1FRAME);
+    imx296_write_reg(client, IMX296_GAINDLY, IMX296_GAINDLY_NONE);
     imx296_write_reg(client, IMX296_BLKLEVEL, 0x03c);
 
     return ret;
@@ -405,16 +393,11 @@ static int imx296_stream_on(struct imx296 *imx296)
     struct i2c_client *client = imx296->client;
     int ret = 0;
 
-    // ret = __v4l2_ctrl_handler_setup(&imx296->ctrls);
-    // if (ret) return ret;
+    ret = imx296_write_reg(client, IMX296_CTRL00, 0);
+	usleep_range(10000, 15000);
 
-    imx296_write_reg(client, IMX296_CTRL00, 0);
-	usleep_range(2000, 5000);
-
-    imx296_write_reg(client, IMX296_CTRL0B, 0);
-    imx296_write_reg(client, IMX296_LOWLAGTRG, 0);
-
-    imx296_write_reg(client, IMX296_CTRL0A, 0);
+    ret |= imx296_write_reg(client, IMX296_CTRL0B, 0);
+    ret |= imx296_write_reg(client, IMX296_CTRL0A, 0);
 
     return ret;
 }
@@ -424,8 +407,9 @@ static int imx296_stream_off(struct imx296 *imx296)
     struct i2c_client *client = imx296->client;
     int ret = 0;
 
-    imx296_write_reg(client, IMX296_CTRL0A, IMX296_CTRL0A_XMSTA);
-    imx296_write_reg(client, IMX296_CTRL00, IMX296_CTRL00_STANDBY);
+    ret |= imx296_write_reg(client, IMX296_CTRL0A, 1);
+    usleep_range(20000, 30000);
+    ret |= imx296_write_reg(client, IMX296_CTRL00, 1);
 
     return ret;
 }
@@ -436,11 +420,15 @@ static int imx296_s_stream(struct v4l2_subdev *sd, int on)
     struct i2c_client *client = imx296->client;
     int ret = 0;
 
-    dev_info(&imx296->client->dev, "s_stream: %d. %dx%d\n", on, 
+    dev_info(&client->dev, "s_stream: %d. %dx%d\n", on, 
         IMX296_PIXEL_ARRAY_WIDTH, IMX296_PIXEL_ARRAY_HEIGHT);
     
     mutex_lock(&imx296->mutex);
     on = !!on;
+
+    if (on == imx296->streaming)
+        goto unlock_and_return;
+
     if (on) {
         ret = pm_runtime_get_sync(&client->dev);
         if (ret < 0) {
@@ -459,21 +447,20 @@ static int imx296_s_stream(struct v4l2_subdev *sd, int on)
             dev_err(&client->dev, "Failed to start streaming\n");
             goto err_pm;
         }
-
-        imx296->streaming = true;
     }
     else {
         imx296_stream_off(imx296);
 
         pm_runtime_put(&client->dev);
-        imx296->streaming = false;
     }
+
+    imx296->streaming = on;
 
     mutex_unlock(&imx296->mutex);
     return 0;
 
 err_pm:
-    pm_runtime_put_sync(&client->dev);
+    pm_runtime_put(&client->dev);
 unlock_and_return:
     mutex_unlock(&imx296->mutex);
     return ret;
@@ -517,9 +504,8 @@ static int imx296_enum_frame_size(struct v4l2_subdev *sd,
     struct v4l2_subdev_state *state,
     struct v4l2_subdev_frame_size_enum *fse)
 {
-    printk("fse->index: %d, fse->code: %d\n", fse->index, fse->code);
-    if (fse->index > 0) return -EINVAL;
-    if (fse->code != 0 && fse->code != IMX296_FRAME_CODE) return -EINVAL;
+    if (fse->index != 0) return -EINVAL;
+    if (fse->code != 0 || fse->code != IMX296_FRAME_CODE) return -EINVAL;
 
     fse->min_width = IMX296_PIXEL_ARRAY_WIDTH;
     fse->max_width = IMX296_PIXEL_ARRAY_WIDTH;
@@ -533,11 +519,12 @@ static int imx296_enum_frame_interval(struct v4l2_subdev *sd,
     struct v4l2_subdev_state *state,
     struct v4l2_subdev_frame_interval_enum *fi)
 {
+    if (fi->index != 0) return -EINVAL;
+
     fi->interval = IMX296_FRAME_INTERVAL;
     fi->width = IMX296_PIXEL_ARRAY_WIDTH;
     fi->height = IMX296_PIXEL_ARRAY_HEIGHT;
     fi->code = IMX296_FRAME_CODE;
-    fi->reserved[0] = 0;
 
     return 0;
 }
@@ -548,29 +535,20 @@ static int imx296_get_fmt(
     struct v4l2_subdev_format *fmt)
 {
     struct imx296 *imx296 = to_imx296(sd);
+    struct v4l2_mbus_framefmt *framefmt;
     
     printk("in get fmt\n");
 
     mutex_lock(&imx296->mutex);
 
     if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
-        fmt->format = *v4l2_subdev_get_try_format(sd, state, fmt->pad);
+        framefmt = v4l2_subdev_get_try_format(sd, state, fmt->pad);
     }
     else {
-        fmt->format.width = IMX296_PIXEL_ARRAY_WIDTH;
-        fmt->format.height = IMX296_PIXEL_ARRAY_HEIGHT;
-        fmt->format.code = IMX296_FRAME_CODE;
-        fmt->format.field = V4L2_FIELD_NONE;
-        fmt->reserved[0] = 0;
-
-        fmt->format.colorspace = V4L2_COLORSPACE_RAW;
-        fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
-        fmt->format.quantization = V4L2_QUANTIZATION_FULL_RANGE;
-        fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
+        framefmt = &imx296->current_format;
     }
 
-    printk("DEBUG_IMX296: get_fmt called with pad: %u, which: %u\n", fmt->pad, fmt->which);
-    printk("DEBUG_IMX296: width: %d, height: %d, code: %d, field: %d\n", fmt->format.width, fmt->format.height, fmt->format.code, fmt->format.field);
+    fmt->format = *framefmt;
 
     mutex_unlock(&imx296->mutex);
 
@@ -582,6 +560,7 @@ static int imx296_set_fmt(struct v4l2_subdev *sd,
     struct v4l2_subdev_format *fmt)
 {
     struct imx296 *imx296 = to_imx296(sd);
+    struct v4l2_mbus_framefmt *framefmt;
 
     printk("in set fmt\n");
     
@@ -591,13 +570,20 @@ static int imx296_set_fmt(struct v4l2_subdev *sd,
     fmt->format.height = IMX296_PIXEL_ARRAY_HEIGHT;
     fmt->format.code = IMX296_FRAME_CODE;
     fmt->format.field = V4L2_FIELD_NONE;
-
     fmt->format.colorspace = V4L2_COLORSPACE_RAW;
-    fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
-    fmt->format.quantization = V4L2_QUANTIZATION_FULL_RANGE;
-    fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
 
-    printk("DEBUG_IMX296: width: %d, height: %d, code: %d, field: %d\n", fmt->format.width, fmt->format.height, fmt->format.code, fmt->format.field);
+    if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
+        framefmt = v4l2_subdev_get_try_format(sd, state, fmt->pad);
+    }
+    else {
+        framefmt = &imx296->current_format;
+        if (imx296->link_freq)
+            __v4l2_ctrl_s_ctrl(imx296->link_freq, imx296_link_freqs[0]);
+        if (imx296->pixel_rate)
+            __v4l2_ctrl_s_ctrl_int64(imx296->pixel_rate, imx296_link_freqs[0] * 2 / IMX296_BPP);
+    }
+
+    *framefmt = fmt->format;
 
     mutex_unlock(&imx296->mutex);
 
@@ -610,7 +596,7 @@ static int imx296_get_mbus_config(
     struct v4l2_mbus_config *config)
 {
     config->type = V4L2_MBUS_CSI2_DPHY;
-    config->bus.mipi_csi2.num_data_lanes = 2;
+    config->bus.mipi_csi2.num_data_lanes = IMX296_LANES;
 
     return 0;
 }
@@ -625,6 +611,8 @@ static int __imx296_power_on(struct imx296 *imx296)
     if (imx296->clk) {
         clk_prepare_enable(imx296->clk);
     }
+
+    usleep_range(1000, 2000);
 
     return 0;
 }
@@ -756,7 +744,7 @@ static int imx296_probe(struct i2c_client *client)
     imx296->link_freq = v4l2_ctrl_new_int_menu(&imx296->ctrls, NULL, V4L2_CID_LINK_FREQ, 
                                                ARRAY_SIZE(imx296_link_freqs) - 1, 0, imx296_link_freqs);
     imx296->pixel_rate = v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_PIXEL_RATE, 
-                                           0, imx296_pixel_rate[0], 1, imx296_pixel_rate[0]);
+                                           1122000000 / IMX296_BPP, 1198000000 / IMX296_BPP, 1, 1188000000 / IMX296_BPP);
 
     sd->ctrl_handler = &imx296->ctrls;
 
