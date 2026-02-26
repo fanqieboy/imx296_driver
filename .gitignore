@@ -4,6 +4,7 @@
 *.mod
 *.mod.o
 *.mod.c
+*.code-workspace
 
 # --- 2. 隐藏的编译指令 (解决你提到的 .ko.cmd, .mod.o.cmd 等) ---
 # 这条规则能把所有目录下（包括 src）以 . 开头且以 .cmd 结尾的文件全部干掉
