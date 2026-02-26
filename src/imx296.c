@@ -14,7 +14,7 @@
 #include <linux/of_graph.h>
 
 #define VERSION_MAJOR                   1
-#define VERSION_MINOR                   1
+#define VERSION_MINOR                   2
 
 #define IMX296_NAME                     "imx296"
 
@@ -235,6 +235,10 @@ struct imx296 {
 
     struct v4l2_mbus_framefmt current_format;
     struct v4l2_ctrl_handler ctrls;
+    struct v4l2_ctrl *hblank;
+    struct v4l2_ctrl *vblank;
+    struct v4l2_ctrl *vflip;
+    struct v4l2_ctrl *hflip;
     struct v4l2_ctrl *link_freq;
 	struct v4l2_ctrl *pixel_rate;
 };
@@ -373,7 +377,7 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
     imx296_write_reg(client, IMX296_CTRL0D, 0);
 
     imx296_write_reg(client, IMX296_HMAX, 1100);
-    imx296_write_reg(client, IMX296_VMAX, 1118);
+    imx296_write_reg(client, IMX296_VMAX, IMX296_PIXEL_ARRAY_HEIGHT + imx296->vblank->cur.val);
 
     imx296_write_reg(client, IMX296_INCKSEL(0), 0x80);
     imx296_write_reg(client, IMX296_INCKSEL(1), 0x0b);
@@ -384,6 +388,11 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
 
     imx296_write_reg(client, IMX296_GAINDLY, IMX296_GAINDLY_1FRAME);
     imx296_write_reg(client, IMX296_BLKLEVEL, 0x03c);
+
+    ////////////////////
+    imx296_write_reg(client, IMX296_SHS1, 1621 - 800); // 约 10ms
+    imx296_write_reg(client, IMX296_GAIN, 0);
+    ////////////////////
 
     return ret;
 }
@@ -685,6 +694,78 @@ done:
     return ret;
 }
 
+static int imx296_ctrls_init(struct imx296 *imx296)
+{
+    // struct v4l2_fwnode_device_properties props;
+    // int ret;
+
+    // ret = v4l2_fwnode_device_parse(imx296->client->dev, &props);
+    // if (ret < 0) return ret;
+    struct i2c_client *client = imx296->client;
+
+    v4l2_ctrl_handler_init(&imx296->ctrls, 9);
+
+    v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_EXPOSURE, 1, 0xfffff, 1, 1104);
+    v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_ANALOGUE_GAIN, 0, 480, 1, 0);
+
+    imx296->vblank = v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_VBLANK, 
+        30, 2000, 1, 1621 - IMX296_PIXEL_ARRAY_HEIGHT);
+    imx296->hblank = v4l2_ctrl_new_std(&imx296->ctrls, NULL, 
+        V4L2_CID_HBLANK, 304, 304, 1, 304);
+    if (imx296->hblank)
+        imx296->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+    imx296->pixel_rate = v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_PIXEL_RATE,
+        1122000000 / 10, 1198000000 / 10, 1, 1188000000 / 10);
+
+    imx296->link_freq = v4l2_ctrl_new_int_menu(&imx296->ctrls, NULL, V4L2_CID_LINK_FREQ,
+        0, 0, imx296_link_freqs);
+
+    if (imx296->ctrls.error) {
+        dev_err(&client->dev, "failed to add controls (%d)\n", imx296->ctrls.error);
+        v4l2_ctrl_handler_free(&imx296->ctrls);
+        return imx296->ctrls.error;
+    }
+
+    imx296->subdev.ctrl_handler = &imx296->ctrls;
+
+    return 0;
+}
+
+static int imx296_subdev_init(struct imx296 *imx296)
+{
+    struct i2c_client *client = imx296->client;
+    int ret;
+
+    v4l2_i2c_subdev_init(&imx296->subdev, client, &imx296_subdev_ops);
+    imx296->subdev.internal_ops = &imx296_internal_ops;
+
+    ret = imx296_ctrls_init(imx296);
+    if (ret < 0) return ret;
+
+    imx296->subdev.entity.ops = &imx296_subdev_entity_ops;
+    imx296->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+    imx296->pad.flags = MEDIA_PAD_FL_SOURCE;
+    imx296->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
+    ret = media_entity_pads_init(&imx296->subdev.entity, 1, &imx296->pad);
+    if (ret < 0) {
+        v4l2_ctrl_handler_free(&imx296->ctrls);
+        return ret;
+    }
+
+    imx296->subdev.state_lock = imx296->subdev.ctrl_handler->lock;
+
+    v4l2_subdev_init_finalize(&imx296->subdev);
+
+    return ret;
+}
+
+static void imx296_subdev_cleanup(struct imx296 *imx296)
+{
+    media_entity_cleanup(&imx296->subdev.entity);
+    v4l2_ctrl_handler_free(&imx296->ctrls);
+}
+
 /* 3. Probe 函数：只做最核心的注册动作 */
 static int imx296_probe(struct i2c_client *client)
 {
@@ -737,36 +818,16 @@ static int imx296_probe(struct i2c_client *client)
 
     /* B. 初始化 Subdev */
     sd = &imx296->subdev;
-    imx296_entity_init_cfg(sd, NULL);
-
-    v4l2_ctrl_handler_init(&imx296->ctrls, 2);
-
-    imx296->link_freq = v4l2_ctrl_new_int_menu(&imx296->ctrls, NULL, V4L2_CID_LINK_FREQ, 
-                                               ARRAY_SIZE(imx296_link_freqs) - 1, 0, imx296_link_freqs);
-    imx296->pixel_rate = v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_PIXEL_RATE, 
-                                           1122000000 / IMX296_BPP, 1198000000 / IMX296_BPP, 1, 1188000000 / IMX296_BPP);
-
-    sd->ctrl_handler = &imx296->ctrls;
-
-    if (imx296->ctrls.error) {
-        ret = imx296->ctrls.error;
-        goto err_free_handler;
-    }
-
-    v4l2_i2c_subdev_init(sd, client, &imx296_subdev_ops);
-
-    sd->internal_ops = &imx296_internal_ops;
-    sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
     sd->dev = &client->dev;
-    sd->entity.ops = &imx296_subdev_entity_ops;
-    sd->entity.function = MEDIA_ENT_F_CAM_SENSOR;
 
-    imx296->pad.flags = MEDIA_PAD_FL_SOURCE;
-    ret = media_entity_pads_init(&sd->entity, 1, &imx296->pad);
-    if (ret < 0) goto err_free_handler;
+    imx296_entity_init_cfg(sd, NULL);
+    
+    ret = imx296_subdev_init(imx296);
+	if (ret < 0)
+		goto err_cleanup;
 
     ret = __imx296_power_on(imx296);
-    if (ret) goto err_clean_entity;
+    if (ret) goto err_cleanup;
 
     ret = imx296_check_sensor_id(imx296);
     if (ret) goto err_power_off;
@@ -791,10 +852,8 @@ static int imx296_probe(struct i2c_client *client)
 
 err_power_off:
     __imx296_power_off(imx296);
-err_clean_entity:
-    media_entity_cleanup(&sd->entity);
-err_free_handler:
-    v4l2_ctrl_handler_free(&imx296->ctrls);
+err_cleanup:
+    imx296_subdev_cleanup(imx296);
 
     mutex_destroy(&imx296->mutex);
 
