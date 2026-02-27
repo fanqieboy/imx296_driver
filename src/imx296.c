@@ -14,7 +14,7 @@
 #include <linux/of_graph.h>
 
 #define VERSION_MAJOR                   1
-#define VERSION_MINOR                   2
+#define VERSION_MINOR                   3
 
 #define IMX296_NAME                     "imx296"
 
@@ -35,6 +35,8 @@ const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 60};
 #define IMX296_GAINDLY_NONE				0x08
 #define IMX296_GAINDLY_1FRAME			0x09
 #define IMX296_FRAME_CODE               MEDIA_BUS_FMT_SRGGB10_1X10
+#define IMX296_GAIN_MIN					0
+#define IMX296_GAIN_MAX					480
 
 /* 核心寄存器定义 */
 #define IMX296_CTRL00                   IMX296_REG_8BIT(0x3000)
@@ -78,9 +80,6 @@ static const s64 imx296_link_freqs[] = {
     IMX296_LINK_FREQ, // 594 MHz
 };
 
-static long imx296_ioctl(struct v4l2_subdev *sd, 
-    unsigned int cmd, void *arg);
-
 static int imx296_s_stream(struct v4l2_subdev *sd, int on);
 static int imx296_g_frame_interval(struct v4l2_subdev *sd,
     struct v4l2_subdev_frame_interval *fi);
@@ -109,6 +108,7 @@ static int imx296_entity_init_cfg(struct v4l2_subdev *sd,
 static int imx296_runtime_suspend(struct device *dev);
 static int imx296_runtime_resume(struct device *dev);
 static int imx296_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh);
+static int imx296_s_ctrl(struct v4l2_ctrl *ctrl);
 
 static const struct v4l2_subdev_core_ops imx296_core_ops = {
     // .ioctl = imx296_ioctl,
@@ -145,6 +145,10 @@ static const struct dev_pm_ops imx296_pm_ops = {
 
 static const struct media_entity_operations imx296_subdev_entity_ops = {
 	.link_validate = v4l2_subdev_link_validate,
+};
+
+static const struct v4l2_ctrl_ops imx296_ctrl_ops = {
+    .s_ctrl = imx296_s_ctrl,
 };
 
 struct regval {
@@ -313,54 +317,6 @@ static int imx296_open(
     return 0;
 }
 
-static long imx296_ioctl(
-    struct v4l2_subdev *sd, 
-    unsigned int cmd, 
-    void *arg)
-{
-    struct imx296 *imx296 = to_imx296(sd);
-    struct rkmodule_channel_info *ch_info;
-    printk("--- [IMX296] ioctl called, cmd: 0x%08x ---\n", cmd);
-
-    switch (cmd) {
-    case RKMODULE_GET_CSI_DSI_INFO:
-    case RKMODULE_GET_HDMI_MODE:
-    case RKMODULE_GET_HDR_CFG:
-    case RKMODULE_GET_START_STREAM_SEQ:
-        return 0;
-    case RKMODULE_GET_CAPTURE_MODE: {
-        struct rkmodule_capture_info *cap_info = (struct rkmodule_capture_info *)arg;
-        memset(cap_info, 0, sizeof(*cap_info));
-        cap_info->mode = 0; 
-        return 0;
-    }
-    case RKMODULE_GET_CHANNEL_INFO:
-        ch_info = (struct rkmodule_channel_info *)arg;
-        ch_info->index = 0;
-        ch_info->vc = 0;
-        ch_info->width = IMX296_PIXEL_ARRAY_WIDTH;
-        ch_info->height = IMX296_PIXEL_ARRAY_HEIGHT;
-        ch_info->bus_fmt = IMX296_FRAME_CODE;
-        return 0;
-    case RKMODULE_GET_MODULE_INFO: {
-        struct rkmodule_inf *inf = (struct rkmodule_inf *)arg;
-        memset(inf, 0, sizeof(*inf));
-        strlcpy(inf->base.sensor, IMX296_NAME, sizeof(inf->base.sensor));
-        strlcpy(inf->base.module, imx296->module_name, sizeof(inf->base.module));
-        strlcpy(inf->base.lens, "default", sizeof(inf->base.lens));
-        return 0;
-    }
-    case RKMODULE_GET_CSI_DPHY_PARAM: {
-        struct rkmodule_csi_dphy_param *dphy_param = (struct rkmodule_csi_dphy_param *)arg;
-        memset(dphy_param, 0, sizeof(*dphy_param));
-        dphy_param->vendor = 0;
-        return 0;
-    }
-    default:
-        return -ENOIOCTLCMD;
-    }
-}
-
 static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
 {
     struct i2c_client *client = imx296->client;
@@ -390,8 +346,8 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
     imx296_write_reg(client, IMX296_BLKLEVEL, 0x03c);
 
     ////////////////////
-    imx296_write_reg(client, IMX296_SHS1, 1621 - 800); // 约 10ms
-    imx296_write_reg(client, IMX296_GAIN, 0);
+    // imx296_write_reg(client, IMX296_SHS1, 1621 - 800); // 约 10ms
+    // imx296_write_reg(client, IMX296_GAIN, 0);
     ////////////////////
 
     return ret;
@@ -694,22 +650,65 @@ done:
     return ret;
 }
 
+static int imx296_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+    struct imx296 *imx296 = container_of(ctrl->handler, struct imx296, ctrls);
+    struct i2c_client *client = imx296->client;
+    struct v4l2_subdev_state *state;
+    unsigned int vmax;
+    int ret = 0;
+
+    if (!pm_runtime_get_if_in_use(&client->dev)) return 0;
+
+    state = v4l2_subdev_get_locked_active_state(&imx296->subdev);
+
+    ret |= imx296_write_reg(client, IMX296_CTRL08, IMX296_CTRL08_REGHOLD);
+
+    switch (ctrl->id) {
+    case V4L2_CID_EXPOSURE:
+        vmax = IMX296_PIXEL_ARRAY_HEIGHT + imx296->vblank->cur.val;
+        ctrl->val = min_t(int, ctrl->val, vmax);
+        ret |= imx296_write_reg(client, IMX296_SHS1, vmax - ctrl->val);
+        break;
+
+    case V4L2_CID_ANALOGUE_GAIN:
+        ret |= imx296_write_reg(client, IMX296_GAIN, ctrl->val);
+        break;
+
+    case V4L2_CID_VBLANK:
+        ret |= imx296_write_reg(client, IMX296_VMAX, IMX296_PIXEL_ARRAY_HEIGHT + ctrl->val);
+        break;
+
+    default:
+        ret = -EINVAL;
+        break;
+    }
+
+    ret |= imx296_write_reg(client, IMX296_CTRL08, 0);
+
+    pm_runtime_put(&client->dev);
+
+    return ret;
+}
+
 static int imx296_ctrls_init(struct imx296 *imx296)
 {
-    // struct v4l2_fwnode_device_properties props;
-    // int ret;
-
-    // ret = v4l2_fwnode_device_parse(imx296->client->dev, &props);
-    // if (ret < 0) return ret;
     struct i2c_client *client = imx296->client;
+    struct v4l2_fwnode_device_properties props;
+    int ret;
+
+    ret = v4l2_fwnode_device_parse(&client->dev, &props);
+    if (ret < 0) return ret;
 
     v4l2_ctrl_handler_init(&imx296->ctrls, 9);
 
-    v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_EXPOSURE, 1, 0xfffff, 1, 1104);
-    v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_ANALOGUE_GAIN, 0, 480, 1, 0);
+    v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
+        V4L2_CID_EXPOSURE, 1, 0xfffff, 1, 1104);
+    v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
+        V4L2_CID_ANALOGUE_GAIN, IMX296_GAIN_MIN, IMX296_GAIN_MAX, 1, IMX296_GAIN_MIN);
 
-    imx296->vblank = v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_VBLANK, 
-        30, 2000, 1, 1621 - IMX296_PIXEL_ARRAY_HEIGHT);
+    imx296->vblank = v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
+        V4L2_CID_VBLANK, 30, 0xfffff - IMX296_PIXEL_ARRAY_HEIGHT, 1, 30);
     imx296->hblank = v4l2_ctrl_new_std(&imx296->ctrls, NULL, 
         V4L2_CID_HBLANK, 304, 304, 1, 304);
     if (imx296->hblank)
@@ -720,6 +719,8 @@ static int imx296_ctrls_init(struct imx296 *imx296)
 
     imx296->link_freq = v4l2_ctrl_new_int_menu(&imx296->ctrls, NULL, V4L2_CID_LINK_FREQ,
         0, 0, imx296_link_freqs);
+
+    v4l2_ctrl_new_fwnode_properties(&imx296->ctrls, &imx296_ctrl_ops, &props);
 
     if (imx296->ctrls.error) {
         dev_err(&client->dev, "failed to add controls (%d)\n", imx296->ctrls.error);
