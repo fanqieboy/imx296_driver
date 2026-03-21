@@ -14,7 +14,7 @@
 #include <linux/of_graph.h>
 
 #define VERSION_MAJOR                   1
-#define VERSION_MINOR                   3
+#define VERSION_MINOR                   4
 
 #define IMX296_NAME                     "imx296"
 
@@ -216,10 +216,6 @@ static const struct regval imx296_init_setting[] = {
     { IMX296_REG_8BIT(0x40c7), 0x0f },
     { IMX296_REG_8BIT(0x40c8), 0x00 },
     { IMX296_REG_8BIT(0x4174), 0x00 },
-};
-
-static const struct imx296_mode supported_modes[] = {
-
 };
 
 struct imx296 {
@@ -522,7 +518,7 @@ static int imx296_get_fmt(
     struct imx296 *imx296 = to_imx296(sd);
     struct v4l2_mbus_framefmt *framefmt;
     
-    printk("in get fmt\n");
+    // printk("in get fmt\n");
 
     mutex_lock(&imx296->mutex);
 
@@ -547,7 +543,7 @@ static int imx296_set_fmt(struct v4l2_subdev *sd,
     struct imx296 *imx296 = to_imx296(sd);
     struct v4l2_mbus_framefmt *framefmt;
 
-    printk("in set fmt\n");
+    // printk("in set fmt\n");
     
     mutex_lock(&imx296->mutex);
 
@@ -841,12 +837,12 @@ static int imx296_probe(struct i2c_client *client)
     /* B. 初始化 Subdev */
     sd = &imx296->subdev;
     sd->dev = &client->dev;
-
-    imx296_entity_init_cfg(sd, NULL);
     
     ret = imx296_subdev_init(imx296);
 	if (ret < 0)
 		goto err_cleanup;
+
+    imx296_entity_init_cfg(sd, NULL);
 
     ret = __imx296_power_on(imx296);
     if (ret) goto err_cleanup;
