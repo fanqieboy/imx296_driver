@@ -1,0 +1,121 @@
+{
+  "skill_name": "linux-driver-development",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I need to write a simple character device driver for a custom FPGA peripheral. The FPGA is memory-mapped at a fixed physical address 0xA0000000, 4KB size, and exposes a single 32-bit register at offset 0x00 that I can read and write from userspace. No interrupts. I want userspace to access it via /dev/fpga0. I'm targeting Linux 6.6 on an ARM64 SoC. Can you write me a complete driver for this?",
+      "expected_output": "Complete, compilable Linux kernel module implementing a misc character device with ioremap, file operations (open/release/read/write or ioctl), ioremap of fixed MMIO address, a Makefile, and correct module boilerplate. Should use devm_ where applicable, include proper error handling in probe, and produce a /dev/fpga0 node via misc_register().",
+      "files": [],
+      "assertions": [
+        {
+          "name": "compiles-correctly",
+          "description": "The driver uses correct Linux kernel headers and APIs for a 6.6-era driver (no deprecated APIs like check_mem_region)"
+        },
+        {
+          "name": "uses-misc-register",
+          "description": "Driver registers with the misc subsystem via misc_register() to create /dev/fpga0"
+        },
+        {
+          "name": "uses-ioremap-or-devm-ioremap",
+          "description": "Driver maps the MMIO region using ioremap_resource or devm_ioremap and uses readl/writel (not direct pointer derefs)"
+        },
+        {
+          "name": "private-state-struct",
+          "description": "Driver defines a per-device private struct (not global variables) to hold MMIO base and device state"
+        },
+        {
+          "name": "file-operations-implemented",
+          "description": "Driver implements file_operations with at least open, release, and either read/write or unlocked_ioctl"
+        },
+        {
+          "name": "makefile-present",
+          "description": "Response includes a working Makefile for out-of-tree module build"
+        },
+        {
+          "name": "module-boilerplate",
+          "description": "Driver includes MODULE_LICENSE, MODULE_AUTHOR, MODULE_DESCRIPTION macros"
+        },
+        {
+          "name": "error-handling-in-init",
+          "description": "Initialization/probe path checks return values of ioremap and misc_register and handles errors"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "I'm writing a platform driver for a temperature sensor peripheral on an embedded SoC. The sensor is I2C-connected (address 0x48), described in Device Tree, and reports temperature as a 16-bit signed value in units of 1/128 °C. I want to expose it via the Linux IIO subsystem so that standard tools like iio_readdev can read it. Kernel 6.1. Show me the full driver including DT binding example, probe/remove, IIO channel registration, and the read_raw callback.",
+      "expected_output": "Complete I2C + IIO driver with: i2c_add_driver registration, of_device_id match table with MODULE_DEVICE_TABLE, probe() using devm_ APIs including devm_iio_device_alloc and iio_device_register, an iio_chan_spec array defining a temperature channel, read_raw callback converting the 16-bit sensor value to IIO format (val + val2 for millidegrees), and a DTS snippet showing the device node. Correct error handling throughout.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses-i2c-driver",
+          "description": "Driver uses i2c_add_driver() or module_i2c_driver() and defines struct i2c_driver"
+        },
+        {
+          "name": "of-device-id-table",
+          "description": "Driver defines of_device_id match table with MODULE_DEVICE_TABLE(of, ...)"
+        },
+        {
+          "name": "uses-iio-subsystem",
+          "description": "Driver uses devm_iio_device_alloc() and iio_device_register() to register with IIO"
+        },
+        {
+          "name": "iio-channel-defined",
+          "description": "Driver defines at least one iio_chan_spec with type IIO_TEMP"
+        },
+        {
+          "name": "read-raw-callback",
+          "description": "Driver implements read_raw callback that returns IIO_VAL_INT_PLUS_MICRO or IIO_VAL_FRACTIONAL for temperature"
+        },
+        {
+          "name": "dts-snippet-present",
+          "description": "Response includes a Device Tree node snippet showing compatible string, reg address, and example usage"
+        },
+        {
+          "name": "devm-used-in-probe",
+          "description": "Probe function uses devm_ APIs (devm_kzalloc, devm_iio_device_alloc) rather than manual allocation"
+        },
+        {
+          "name": "temperature-conversion-correct",
+          "description": "read_raw correctly interprets the 16-bit signed value in 1/128°C units and converts to millidegrees or appropriate IIO format"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I'm adding runtime power management to an existing platform driver. Right now the driver has probe/remove and basic hardware init, but it has no PM at all. The hardware has two power states: fully on (normal operation) and clock-gated (idle, register state preserved). Show me how to add both system sleep (suspend/resume for hibernate/S3) and runtime PM so the hardware gates its clock when idle for more than 50ms. I want to understand what each piece does, not just get boilerplate.",
+      "expected_output": "Clear explanation of system sleep vs runtime PM distinction, then code showing: dev_pm_ops with SYSTEM_SLEEP_PM_OPS and RUNTIME_PM_OPS macros, suspend/resume callbacks saving/restoring state, runtime_suspend/runtime_resume callbacks for clock gating, pm_runtime_set_autosuspend_delay(dev, 50) + pm_runtime_use_autosuspend() in probe, pm_runtime_enable/disable in probe/remove, pm_runtime_get_sync/put usage pattern in driver ops, and pm_ptr() usage on the driver struct. Should explain WHY each piece exists, not just show the code.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "explains-system-vs-runtime-pm",
+          "description": "Response clearly explains the difference between system sleep (S3/hibernate) and runtime PM (idle clock gating)"
+        },
+        {
+          "name": "dev-pm-ops-correct",
+          "description": "Driver defines dev_pm_ops using SYSTEM_SLEEP_PM_OPS and RUNTIME_PM_OPS macros (or equivalent SET_SYSTEM_SLEEP_PM_OPS / SET_RUNTIME_PM_OPS)"
+        },
+        {
+          "name": "autosuspend-delay-set",
+          "description": "Probe sets autosuspend delay to 50ms using pm_runtime_set_autosuspend_delay() and pm_runtime_use_autosuspend()"
+        },
+        {
+          "name": "pm-runtime-enable-in-probe",
+          "description": "Probe calls pm_runtime_set_active() and pm_runtime_enable(); remove calls pm_runtime_disable()"
+        },
+        {
+          "name": "get-sync-put-pattern",
+          "description": "Response shows pm_runtime_get_sync() before hardware access and pm_runtime_put_autosuspend() or pm_runtime_put() after, with error handling"
+        },
+        {
+          "name": "pm-ptr-used",
+          "description": "Driver struct uses pm_ptr(&mydriver_pm_ops) rather than a bare pointer, for CONFIG_PM=n compatibility"
+        },
+        {
+          "name": "explains-why",
+          "description": "Response explains the rationale behind key design choices (e.g., why devm_ order matters, why pm_runtime_get_sync returns negative, what EPROBE_DEFER means for PM)"
+        }
+      ]
+    }
+  ]
+}
