@@ -20,7 +20,7 @@
 
 #define IMX296_PIXEL_ARRAY_WIDTH		1456
 #define IMX296_PIXEL_ARRAY_HEIGHT		1088
-const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 60};
+static const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 60};
 #define IMX296_FRAME_INTERVAL           IMX296_MAX_FPS
 
 /* 寄存器位宽宏：从地址中提取长度 */
@@ -80,6 +80,9 @@ static const s64 imx296_link_freqs[] = {
     IMX296_LINK_FREQ, // 594 MHz
 };
 
+static long imx296_ioctl(struct v4l2_subdev *sd, 
+    unsigned int cmd, void *arg);
+
 static int imx296_s_stream(struct v4l2_subdev *sd, int on);
 static int imx296_g_frame_interval(struct v4l2_subdev *sd,
     struct v4l2_subdev_frame_interval *fi);
@@ -111,7 +114,7 @@ static int imx296_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh);
 static int imx296_s_ctrl(struct v4l2_ctrl *ctrl);
 
 static const struct v4l2_subdev_core_ops imx296_core_ops = {
-    // .ioctl = imx296_ioctl,
+    .ioctl = imx296_ioctl,
 };
 
 static const struct v4l2_subdev_video_ops imx296_video_ops = {
@@ -345,11 +348,6 @@ static int imx296_setup(struct imx296 *imx296, struct v4l2_subdev_state *state)
     imx296_write_reg(client, IMX296_GAINDLY, IMX296_GAINDLY_1FRAME);
     imx296_write_reg(client, IMX296_BLKLEVEL, 0x03c);
 
-    ////////////////////
-    // imx296_write_reg(client, IMX296_SHS1, 1621 - 800); // 约 10ms
-    // imx296_write_reg(client, IMX296_GAIN, 0);
-    ////////////////////
-
     return ret;
 }
 
@@ -375,6 +373,28 @@ static int imx296_stream_off(struct imx296 *imx296)
     ret |= imx296_write_reg(client, IMX296_CTRL0A, 1);
     usleep_range(20000, 30000);
     ret |= imx296_write_reg(client, IMX296_CTRL00, 1);
+
+    return ret;
+}
+
+static long imx296_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+    struct imx296 *imx296 = to_imx296(sd);
+    struct rkmodule_inf *inf = arg;
+    long ret = 0;
+
+    switch(cmd) {
+    case RKMODULE_GET_MODULE_INFO:
+        memset(inf, 0, sizeof(struct rkmodule_inf));
+        strlcpy(inf->base.sensor, IMX296_NAME, sizeof(inf->base.sensor));
+        strlcpy(inf->base.module, imx296->module_name, sizeof(inf->base.module));
+        strlcpy(inf->base.lens, imx296->len_name, sizeof(inf->base.lens));
+        break;
+
+    default:
+        ret = -ENOIOCTLCMD;
+        break;
+    }
 
     return ret;
 }
@@ -470,7 +490,7 @@ static int imx296_enum_frame_size(struct v4l2_subdev *sd,
     struct v4l2_subdev_frame_size_enum *fse)
 {
     if (fse->index != 0) return -EINVAL;
-    if (fse->code != 0 || fse->code != IMX296_FRAME_CODE) return -EINVAL;
+    if (fse->code != 0 && fse->code != IMX296_FRAME_CODE) return -EINVAL;
 
     fse->min_width = IMX296_PIXEL_ARRAY_WIDTH;
     fse->max_width = IMX296_PIXEL_ARRAY_WIDTH;
@@ -787,6 +807,7 @@ static int imx296_probe(struct i2c_client *client)
     ret = of_property_read_u32(node, RKMODULE_CAMERA_MODULE_INDEX, &imx296->module_index);
     ret |= of_property_read_string(node, RKMODULE_CAMERA_MODULE_FACING, &imx296->module_facing);
     ret |= of_property_read_string(node, RKMODULE_CAMERA_MODULE_NAME, &imx296->module_name);
+    ret |= of_property_read_string(node, RKMODULE_CAMERA_LENS_NAME, &imx296->len_name);
     if (ret) return -EINVAL;
 
     imx296->client = client;
