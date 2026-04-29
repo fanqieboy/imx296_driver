@@ -1,29 +1,27 @@
 {
-    "configurations": [
-        {
-            "name": "rk3588-kernel",
-            "includePath": [
-                "${workspaceFolder}/**",
-                // "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/**",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/include",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/include/uapi",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/arch/arm64/include",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/arch/arm64/include/uapi",
-
-                // "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/**",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/include/generated",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/arch/arm64/include/generated",
-                "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip//build/linux-rockchip/include/uapi"
-            ],
-            "defines": [
-                "__KERNEL__",
-                "MODULE",
-                "CONFIG_I2C"
-            ],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c11",
-            "intelliSenseMode": "linux-gcc-arm64"
-        }
-    ],
-    "version": 4
+  "configurations": [
+    {
+      "name": "linux-gcc-arm64",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/include",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/include/uapi",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/arch/arm64/include",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/kernel-6.1/arch/arm64/include/uapi",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/include/generated",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip/build/linux-rockchip/arch/arm64/include/generated",
+        "/home/lx/rk3588_sdk/lubancat_imx296/ubuntu-rockchip//build/linux-rockchip/include/uapi"
+      ],
+      "defines": [
+        "__KERNEL__",
+        "MODULE",
+        "CONFIG_I2C"
+      ],
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "c11",
+      "intelliSenseMode": "linux-gcc-arm64",
+      "cppStandard": "${default}"
+    }
+  ],
+  "version": 4
 }

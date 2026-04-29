@@ -14,13 +14,13 @@
 #include <linux/of_graph.h>
 
 #define VERSION_MAJOR                   1
-#define VERSION_MINOR                   4
+#define VERSION_MINOR                   5
 
 #define IMX296_NAME                     "imx296"
 
 #define IMX296_PIXEL_ARRAY_WIDTH		1456
 #define IMX296_PIXEL_ARRAY_HEIGHT		1088
-static const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 60};
+static const struct v4l2_fract IMX296_MAX_FPS = {.numerator = 1, .denominator = 30};
 #define IMX296_FRAME_INTERVAL           IMX296_MAX_FPS
 
 /* 寄存器位宽宏：从地址中提取长度 */
@@ -244,6 +244,8 @@ struct imx296 {
     struct v4l2_ctrl *hflip;
     struct v4l2_ctrl *link_freq;
 	struct v4l2_ctrl *pixel_rate;
+    struct v4l2_ctrl *exposure;
+    struct v4l2_ctrl *anal_a_gain;
 };
 
 static int imx296_write_reg(struct i2c_client *client, u32 addr, u32 val)
@@ -420,6 +422,12 @@ static int imx296_s_stream(struct v4l2_subdev *sd, int on)
         ret = imx296_setup(imx296, NULL);
         if (ret) {
             dev_err(&client->dev, "Failed to setup sensor registers\n");
+            goto err_pm;
+        }
+
+        ret = v4l2_ctrl_handler_setup(&imx296->ctrls);
+        if (ret) {
+            dev_err(&client->dev, "Failed to setup controls: %d\n", ret);
             goto err_pm;
         }
 
@@ -682,13 +690,23 @@ static int imx296_s_ctrl(struct v4l2_ctrl *ctrl)
 
     switch (ctrl->id) {
     case V4L2_CID_EXPOSURE:
-        vmax = IMX296_PIXEL_ARRAY_HEIGHT + imx296->vblank->cur.val;
-        ctrl->val = min_t(int, ctrl->val, vmax);
-        ret |= imx296_write_reg(client, IMX296_SHS1, vmax - ctrl->val);
+        {
+            int exposure;
+            vmax = IMX296_PIXEL_ARRAY_HEIGHT + imx296->vblank->cur.val;
+            exposure = min_t(int, ctrl->val, vmax - 4);
+            ret |= imx296_write_reg(client, IMX296_SHS1, vmax - exposure);
+            dev_info(&client->dev, "IMX296 Debug - Set Exposure: req_val = %d, exposure = %d, reg_shs1 = %d, vmax = %u\n",
+                ctrl->val, exposure, vmax - exposure, vmax);
+        }
         break;
 
     case V4L2_CID_ANALOGUE_GAIN:
-        ret |= imx296_write_reg(client, IMX296_GAIN, ctrl->val);
+        {
+            int hw_gain = min_t(int, 30, ctrl->val);
+            hw_gain = hw_gain << 4;
+            ret |= imx296_write_reg(client, IMX296_GAIN, hw_gain);
+            dev_info(&client->dev, "IMX296 Debug - Set Analog Gain: req_val = %d, hw_val = %d\n", ctrl->val, hw_gain);
+        }
         break;
 
     case V4L2_CID_VBLANK:
@@ -696,7 +714,8 @@ static int imx296_s_ctrl(struct v4l2_ctrl *ctrl)
         break;
 
     default:
-        ret = -EINVAL;
+        dev_warn(&client->dev, "%s unhandled ctrl id:0x%x val:%d\n",
+             __func__, ctrl->id, ctrl->val);
         break;
     }
 
@@ -718,17 +737,17 @@ static int imx296_ctrls_init(struct imx296 *imx296)
 
     v4l2_ctrl_handler_init(&imx296->ctrls, 9);
 
-    v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
-        V4L2_CID_EXPOSURE, 1, 0xfffff, 1, 1104);
-    v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
-        V4L2_CID_ANALOGUE_GAIN, IMX296_GAIN_MIN, IMX296_GAIN_MAX, 1, IMX296_GAIN_MIN);
-
     imx296->vblank = v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
-        V4L2_CID_VBLANK, 30, 0xfffff - IMX296_PIXEL_ARRAY_HEIGHT, 1, 30);
+        V4L2_CID_VBLANK, 2185, 2185, 1, 2185);
     imx296->hblank = v4l2_ctrl_new_std(&imx296->ctrls, NULL, 
         V4L2_CID_HBLANK, 304, 304, 1, 304);
     if (imx296->hblank)
         imx296->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+    imx296->exposure = v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
+        V4L2_CID_EXPOSURE, 1, IMX296_PIXEL_ARRAY_HEIGHT + 2185 - 4, 1, 982);
+    imx296->anal_a_gain = v4l2_ctrl_new_std(&imx296->ctrls, &imx296_ctrl_ops, 
+        V4L2_CID_ANALOGUE_GAIN, 1, 30, 1, 1);
 
     imx296->pixel_rate = v4l2_ctrl_new_std(&imx296->ctrls, NULL, V4L2_CID_PIXEL_RATE,
         1122000000 / 10, 1198000000 / 10, 1, 1188000000 / 10);
